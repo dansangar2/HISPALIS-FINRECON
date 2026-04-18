@@ -1,0 +1,12 @@
+------------------------------------------------------------------------------------------------------------------------
+HISPALIS FINRECON - RESUMEN DE EJECUCION
+FECHA PROCESO    : YYYYMMDD
+HORA PROCESO     : HHMMSSCC
+CUENTAS CARGADAS :       4
+TRANS LEIDAS     :       9
+TRANS OK         :       3
+TRANS ERROR      :       6
+TOTAL DEBITADO   : 00000000375.75
+TOTAL ACREDITADO : 00000001200.00
+RETURN CODE      :       0
+------------------------------------------------------------------------------------------------------------------------
