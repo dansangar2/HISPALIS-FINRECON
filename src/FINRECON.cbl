@@ -1,622 +1,693 @@
-       >>SOURCE FREE
-       *> ==================================================================
-       *> EN: FINRECON batch reconciliation sample.
-       *> ES: Ejemplo de conciliación batch FINRECON.
-       *>
-       *> EN: Main design decisions:
-       *> ES: Decisiones principales de diseño:
-       *> EN: 1) Account identifiers use PIC X(24) to support IBAN-sized keys.
-       *> ES: 1) Los identificadores de cuenta usan PIC X(24) para soportar claves tipo IBAN.
-       *> EN: 2) The account last update is stored as ISO 8601 UTC text.
-       *> ES: 2) La última actualización de cuenta se guarda como texto ISO 8601 UTC.
-       *> EN:    A date alone cannot express UTC meaningfully without time.
-       *> ES:    Una fecha sola no expresa UTC de forma útil sin la hora.
-       *> EN: 3) Accounts are loaded into memory for simple and fast validation.
-       *> ES: 3) Las cuentas se cargan en memoria para validar rápido y de forma simple.
-       *> ==================================================================
+      *=============================================================
+      * EN: HISPALIS-FINRECON main program skeleton.
+      * EN: Marker convention used in this project.
+      * EN: F<phase>_P<step> marks the start of a phase step.
+      * EN: EF<phase>_P<step> marks the end of a phase step.
+      *-----------
+      * ES: Esqueleto principal del programa HISPALIS-FINRECON.
+      * ES: Convencion de marcas usada en este proyecto.
+      * ES: F<fase>_P<paso> marca el inicio de un paso.
+      * ES: EF<fase>_P<paso> marca el fin de un paso.
+      *=============================================================
        IDENTIFICATION DIVISION.
-       PROGRAM-ID. FINRECON.
+       PROGRAM-ID. HISPALIS-FINRECON.
 
-       *> ------------------------------------------------------------------
-       *> EN: Environment and file mapping.
-       *> ES: Entorno y asignación de ficheros.
-       *> ------------------------------------------------------------------
+      * F2_P10
+      * EN: Initial program skeleton only.
+      *-----------
+      * ES: Esqueleto inicial del programa.
        ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+
+      * F2_P11
+      * EN: FILE-CONTROL for input and output files.
+      *-----------
+      * ES: FILE-CONTROL para ficheros de entrada y salida.
        INPUT-OUTPUT SECTION.
        FILE-CONTROL.
-           SELECT ACCOUNTS-FILE ASSIGN TO DYNAMIC WS-ACCOUNTS-PATH
+           SELECT ACCOUNTS-FILE
+               ASSIGN       TO DYNAMIC WS-ACCOUNTS-PATH
                ORGANIZATION IS LINE SEQUENTIAL
-               FILE STATUS IS FS-ACCOUNTS.
-           SELECT TRANS-FILE ASSIGN TO DYNAMIC WS-TRANS-PATH
-               ORGANIZATION IS LINE SEQUENTIAL
-               FILE STATUS IS FS-TRANS.
-           SELECT RESULTS-FILE ASSIGN TO DYNAMIC WS-RESULTS-PATH
-               ORGANIZATION IS LINE SEQUENTIAL
-               FILE STATUS IS FS-RESULTS.
-           SELECT ERRORS-FILE ASSIGN TO DYNAMIC WS-ERRORS-PATH
-               ORGANIZATION IS LINE SEQUENTIAL
-               FILE STATUS IS FS-ERRORS.
-           SELECT REPORT-FILE ASSIGN TO DYNAMIC WS-REPORT-PATH
-               ORGANIZATION IS LINE SEQUENTIAL
-               FILE STATUS IS FS-REPORT.
+               FILE STATUS  IS FS-ACCOUNTS.
 
-       *> ------------------------------------------------------------------
-       *> EN: File descriptions and record layouts.
-       *> ES: Descripciones de fichero y layouts de registro.
-       *> ------------------------------------------------------------------
+           SELECT TRANS-FILE
+               ASSIGN       TO DYNAMIC WS-TRANS-PATH
+               ORGANIZATION IS LINE SEQUENTIAL
+               FILE STATUS  IS FS-TRANS.
+
+           SELECT RESULTS-FILE
+               ASSIGN       TO DYNAMIC WS-RESULTS-PATH
+               ORGANIZATION IS LINE SEQUENTIAL
+               FILE STATUS  IS FS-RESULTS.
+
+           SELECT ERRORS-FILE
+               ASSIGN       TO DYNAMIC WS-ERRORS-PATH
+               ORGANIZATION IS LINE SEQUENTIAL
+               FILE STATUS  IS FS-ERRORS.
+
+           SELECT REPORT-FILE
+               ASSIGN       TO DYNAMIC WS-REPORT-PATH
+               ORGANIZATION IS LINE SEQUENTIAL
+               FILE STATUS  IS FS-REPORT.
+      * EF2_P11
+
        DATA DIVISION.
-       FILE SECTION.
 
+      * F2_P12
+      * EN: FILE SECTION linked with project copybooks.
+      *-----------
+      * ES: FILE SECTION enlazada con los copybooks del proyecto.
+       FILE SECTION.
        FD  ACCOUNTS-FILE.
        01  ACCOUNTS-RECORD.
-           COPY ACCNTREC.
+           05  ACCT-IBAN            PIC X(24).
+           05  ACCT-NAME            PIC X(30).
+           05  ACCT-STATUS          PIC X(01).
+           05  ACCT-CURRENCY        PIC X(03).
+           05  ACCT-BALANCE         PIC X(13).
+           05  ACCT-LAST-UPD-UTC    PIC X(20).
 
        FD  TRANS-FILE.
        01  TRANS-RECORD.
-           COPY TRANSREC.
+           COPY "../copybooks/TRANSREC.cpy".
 
        FD  RESULTS-FILE.
        01  RESULTS-RECORD.
-           COPY OUTRESREC.
+           COPY "../copybooks/OUTRESREC.cpy".
 
        FD  ERRORS-FILE.
        01  ERRORS-RECORD.
-           COPY ERRREC.
+           COPY "../copybooks/ERRREC.cpy".
 
        FD  REPORT-FILE.
-       01  REPORT-LINE                PIC X(120).
+       01  REPORT-RECORD              PIC X(120).
+      * EF2_P12
 
-       *> ------------------------------------------------------------------
-       *> EN: Working storage with file paths and process variables.
-       *> ES: Working-storage con rutas de fichero y variables de proceso.
-       *> ------------------------------------------------------------------
        WORKING-STORAGE SECTION.
+       01  WS-COUNTERS.
+           COPY "../copybooks/COUNTERS.cpy".
+       01  WS-PROGRAM-CONTROL.
+           05  WS-RETURN-CODE         PIC S9(4) COMP VALUE ZERO.
 
-       77  WS-ACCOUNTS-PATH           PIC X(80)
-           VALUE "data/ACCOUNTS.DAT".
-       77  WS-TRANS-PATH              PIC X(80)
-           VALUE "data/TRANS.DAT".
-       77  WS-RESULTS-PATH            PIC X(80)
-           VALUE "output/RESULTS.DAT".
-       77  WS-ERRORS-PATH             PIC X(80)
-           VALUE "output/ERRORS.DAT".
-       77  WS-REPORT-PATH             PIC X(80)
-           VALUE "output/REPORT.TXT".
-
-       77  WS-ACCOUNT-COUNT           PIC 9(4) VALUE ZERO.
-       77  WS-SEARCH-IDX              PIC 9(4) VALUE ZERO.
-       77  WS-FOUND-IDX               PIC 9(4) VALUE ZERO.
-       77  WS-RETURN-CODE             PIC S9(4) COMP VALUE ZERO.
+      * F2_P13
+      * EN: Physical paths used by ASSIGN TO DYNAMIC.
+      * EN: File status codes are stored in a dedicated area.
+      *-----------
+      * ES: Rutas fisicas usadas por ASSIGN TO DYNAMIC.
+      * ES: Los file status se guardan en un area dedicada.
+       01  WS-FILE-PATHS.
+           05  WS-ACCOUNTS-PATH       PIC X(256)
+               VALUE '../../data/ACCOUNTS.DAT'.
+           05  WS-TRANS-PATH          PIC X(256)
+               VALUE '../../data/TRANS.DAT'.
+           05  WS-RESULTS-PATH        PIC X(256)
+               VALUE '../../output/RESULTS.DAT'.
+           05  WS-ERRORS-PATH         PIC X(256)
+               VALUE '../../output/ERRORS.DAT'.
+           05  WS-REPORT-PATH         PIC X(256)
+               VALUE '../../output/REPORT.TXT'.
 
        01  WS-FILE-STATUS.
-           05 FS-ACCOUNTS             PIC XX VALUE SPACES.
-           05 FS-TRANS                PIC XX VALUE SPACES.
-           05 FS-RESULTS              PIC XX VALUE SPACES.
-           05 FS-ERRORS               PIC XX VALUE SPACES.
-           05 FS-REPORT               PIC XX VALUE SPACES.
+           05  FS-ACCOUNTS            PIC X(02) VALUE SPACES.
+           05  FS-TRANS               PIC X(02) VALUE SPACES.
+           05  FS-RESULTS             PIC X(02) VALUE SPACES.
+           05  FS-ERRORS              PIC X(02) VALUE SPACES.
+           05  FS-REPORT              PIC X(02) VALUE SPACES.
+      * EF2_P13
 
-       01  WS-FLAGS.
-           05 WS-END-OF-ACCOUNTS      PIC X VALUE "N".
-              88 END-OF-ACCOUNTS      VALUE "Y".
-           05 WS-END-OF-TRANS         PIC X VALUE "N".
-              88 END-OF-TRANS         VALUE "Y".
-           05 WS-HAS-ERROR            PIC X VALUE "N".
-              88 HAS-ERROR            VALUE "Y".
-              88 NO-ERROR             VALUE "N".
-           05 WS-ACCOUNT-FOUND        PIC X VALUE "N".
-              88 ACCOUNT-FOUND        VALUE "Y".
+      * F2_P14
+      * EN: Batch control flags use 88 levels for readable conditions.
+      * EN: Process date and time fields are reserved for audit output.
+      * EN: Search indexes are prepared for account table lookups.
+      * EN: Edited fields support counters and report formatting.
+      * EN: Temporary error data isolates the current failure context.
+      *-----------
+      * ES: Las banderas batch usan niveles 88 para condiciones claras.
+      * ES: Fecha y hora de proceso quedan listas para auditoria.
+      * ES: Los indices de busqueda preparan consultas a la tabla.
+      * ES: Los campos editados soportan contadores y reportes.
+      * ES: El area temporal de error aisla el contexto del fallo.
+       01  WS-BATCH-FLAGS.
+      * F4_P19
+           05  WS-ACCOUNTS-EOF-SW     PIC X VALUE 'N'.
+               88  ACCOUNTS-EOF       VALUE 'Y'.
+               88  END-OF-ACCOUNTS    VALUE 'Y'.
+               88  ACCOUNTS-NOT-EOF   VALUE 'N'.
+      * EF4_P19
+      * F4_P21
+           05  WS-TRANS-EOF-SW        PIC X VALUE 'N'.
+               88  TRANS-EOF          VALUE 'Y'.
+               88  END-OF-TRANS       VALUE 'Y'.
+               88  TRANS-NOT-EOF      VALUE 'N'.
+      * EF4_P21
+           05  WS-FILE-ERROR-SW       PIC X VALUE 'N'.
+               88  FILE-ERROR         VALUE 'Y'.
+               88  FILE-OK            VALUE 'N'.
+           05  WS-BATCH-ERROR-SW      PIC X VALUE 'N'.
+               88  BATCH-ERROR        VALUE 'Y'.
+               88  BATCH-OK           VALUE 'N'.
+           05  WS-ACCOUNTS-OPEN-SW    PIC X VALUE 'N'.
+               88  ACCOUNTS-OPEN      VALUE 'Y'.
+               88  ACCOUNTS-CLOSED    VALUE 'N'.
+           05  WS-TRANS-OPEN-SW       PIC X VALUE 'N'.
+               88  TRANS-OPEN         VALUE 'Y'.
+               88  TRANS-CLOSED       VALUE 'N'.
+           05  WS-RESULTS-OPEN-SW     PIC X VALUE 'N'.
+               88  RESULTS-OPEN       VALUE 'Y'.
+               88  RESULTS-CLOSED     VALUE 'N'.
+           05  WS-ERRORS-OPEN-SW      PIC X VALUE 'N'.
+               88  ERRORS-OPEN        VALUE 'Y'.
+               88  ERRORS-CLOSED      VALUE 'N'.
+           05  WS-REPORT-OPEN-SW      PIC X VALUE 'N'.
+               88  REPORT-OPEN        VALUE 'Y'.
+               88  REPORT-CLOSED      VALUE 'N'.
 
-       *> EN: Batch execution timestamp for the report.
-       *> ES: Marca temporal de ejecución del lote para el informe.
-       01  WS-PROCESS-INFO.
-           05 WS-PROCESS-DATE         PIC 9(8).
-           05 WS-PROCESS-TIME         PIC 9(8).
+       01  WS-PROCESS-DATETIME.
+           05  WS-PROCESS-DATE        PIC 9(08) VALUE ZERO.
+           05  WS-PROCESS-TIME        PIC 9(08) VALUE ZERO.
 
-       01  WS-COUNTERS.
-           COPY COUNTERS.
+       01  WS-SEARCH-CONTROL.
+           05  WS-ACCOUNT-SEARCH-IDX  PIC 9(07) COMP VALUE ZERO.
+           05  WS-ACCOUNT-STORE-IDX   PIC 9(07) COMP VALUE ZERO.
+           05  WS-MATCH-FOUND-SW      PIC X VALUE 'N'.
+               88  MATCH-FOUND        VALUE 'Y'.
+               88  MATCH-NOT-FOUND    VALUE 'N'.
 
-       *> EN: Functional error buffer written to ERRORS.DAT when needed.
-       *> ES: Buffer de error funcional que se vuelca a ERRORS.DAT cuando aplica.
-       01  WS-ERROR-WORK.
-           05 WS-ERROR-CODE           PIC X(04) VALUE SPACES.
-           05 WS-ERROR-TEXT           PIC X(40) VALUE SPACES.
-           05 WS-ERROR-SEVERITY       PIC X(01) VALUE "F".
+       01  WS-EDITED-FIELDS.
+           05  WS-ED-COUNT            PIC ZZZZZZ9.
+           05  WS-ED-RETURN-CODE      PIC ZZZZZZ9.
+           05  WS-ED-AMOUNT           PIC ZZZZZZZZZ99.99.
 
-       *> EN: New balance after applying a valid movement.
-       *> ES: Nuevo saldo tras aplicar un movimiento válido.
-       01  WS-AMOUNT-WORK.
-           05 WS-NEW-BALANCE          PIC 9(11)V99 VALUE ZERO.
+       01  WS-TEMP-ERROR-AREA.
+           05  WS-TEMP-ERR-CODE       PIC X(04) VALUE SPACES.
+           05  WS-TEMP-ERR-SEVERITY   PIC X(01) VALUE SPACES.
+           05  WS-TEMP-ERR-MESSAGE    PIC X(40) VALUE SPACES.
+           05  WS-TEMP-ERR-FILE       PIC X(20) VALUE SPACES.
+           05  WS-TEMP-ERR-STATUS     PIC X(02) VALUE SPACES.
+           05  WS-TEMP-ERR-OPERATION  PIC X(20) VALUE SPACES.
+           05  WS-TEMP-ERR-PATH       PIC X(80) VALUE SPACES.
+      * EF2_P14
 
-       *> EN: Edited fields used only for printable report lines.
-       *> ES: Campos editados usados solo para imprimir el informe.
-       01  WS-EDITED.
-           05 ED-COUNT                PIC ZZZZZZ9.
-           05 ED-AMOUNT               PIC ZZZZZZZZZ99.99.
 
-       *> EN: In-memory account table.
-       *> ES: Tabla de cuentas en memoria.
-       *>
-       *> EN: We store the UTC timestamp as text because ISO 8601 contains
-       *> EN: separators plus the trailing Z marker.
-       *> ES: Guardamos el timestamp UTC como texto porque ISO 8601 contiene
-       *> ES: separadores y el marcador final Z.
-       01  WS-ACCOUNT-TABLE.
-           05 WS-ACCOUNT-ENTRY OCCURS 500 TIMES.
-              10 T-ACCOUNT-IBAN       PIC X(24).
-              10 T-ACCOUNT-NAME       PIC X(30).
-              10 T-ACCOUNT-STATUS     PIC X(01).
-              10 T-ACCOUNT-CURRENCY   PIC X(03).
-              10 T-ACCOUNT-BALANCE    PIC 9(11)V99.
-              10 T-ACCOUNT-LAST-UPD-UTC
-                                      PIC X(20).
+      * F2_P15
+      * EN: Internal account table sized for moderate batch tests.
+      * EN: Each entry mirrors the functional account layout in memory.
+      * EN: A dedicated counter tracks the number of loaded accounts.
+      *-----------
+      * ES: Tabla interna de cuentas dimensionada para pruebas batch.
+      * ES: Cada entrada replica en memoria el layout funcional.
+      * ES: Un contador dedicado controla las cuentas cargadas.
+       01  WS-ACCOUNT-TABLE-AREA.
+           05  WS-LOADED-ACCOUNT-COUNT
+                                   PIC 9(04) VALUE ZERO.
+           05  WS-ACCOUNT-TABLE OCCURS 500 TIMES
+                                   INDEXED BY ACCT-TBL-IDX.
+               10  WS-TBL-ACCOUNT-IBAN
+                                   PIC X(24).
+               10  WS-TBL-ACCOUNT-NAME
+                                   PIC X(30).
+               10  WS-TBL-ACCOUNT-STATUS
+                                   PIC X(01).
+               10  WS-TBL-ACCOUNT-CURRENCY
+                                   PIC X(03).
+               10  WS-TBL-ACCOUNT-BALANCE
+                                   PIC 9(11)V99.
+               10  WS-TBL-ACCOUNT-LAST-UPD-UTC
+                                   PIC X(20).
+      * EF2_P15
 
        PROCEDURE DIVISION.
 
-       *> ------------------------------------------------------------------
-       *> EN: Main orchestration.
-       *> ES: Orquestación principal.
-       *> ------------------------------------------------------------------
+      * F3_P16
+      * EN: Main batch orchestration for the program lifecycle.
+      * EN: The flow gets system date and time, initializes the batch,
+      * EN: loads accounts, processes transactions, finalizes and
+      * EN: returns the batch return code.
+      *-----------
+      * ES: Orquestacion principal batch del ciclo de vida del programa.
+      * ES: El flujo obtiene fecha y hora del sistema, inicializa el lote,
+      * ES: carga cuentas, procesa transacciones, finaliza y devuelve
+      * ES: el codigo de retorno del batch.
        0000-MAIN.
            ACCEPT WS-PROCESS-DATE FROM DATE YYYYMMDD
            ACCEPT WS-PROCESS-TIME FROM TIME
 
            PERFORM 1000-INITIALIZE
-           PERFORM 2000-LOAD-ACCOUNTS UNTIL END-OF-ACCOUNTS
-           PERFORM 3000-PROCESS-TRANSACTIONS UNTIL END-OF-TRANS
-           PERFORM 9000-FINALIZE
+
+           IF BATCH-OK
+               PERFORM 2000-LOAD-ACCOUNTS
+               PERFORM 3000-PROCESS-TRANSACTIONS
+               PERFORM 9000-FINALIZE
+           END-IF
 
            MOVE WS-RETURN-CODE TO RETURN-CODE
-           GOBACK
-           .
+           GOBACK.
 
-       *> ------------------------------------------------------------------
-       *> EN: Open all files and prime the first reads.
-       *> ES: Abrir todos los ficheros y preparar las primeras lecturas.
-       *> ------------------------------------------------------------------
+      * F3_P17
        1000-INITIALIZE.
+      * EN: Initialize batch control areas and open all files.
+      * EN: After OPEN, validate file status in a dedicated paragraph.
+      * EN: When OPEN is successful, prime the first reads for accounts
+      * EN: and transactions so the batch is ready to continue.
+      *-----------
+      * ES: Inicializa las areas de control del lote y abre los ficheros.
+      * ES: Tras el OPEN, valida el file status en un parrafo dedicado.
+      * ES: Si el OPEN es correcto, prepara la primera lectura de cuentas
+      * ES: y transacciones para dejar listo el arranque del lote.
+           MOVE ZERO TO WS-RETURN-CODE
+           MOVE ZERO TO WS-LOADED-ACCOUNT-COUNT
+           MOVE ZERO TO WS-ACCOUNT-SEARCH-IDX
+           MOVE ZERO TO WS-ACCOUNT-STORE-IDX
+           MOVE SPACES TO WS-TEMP-ERROR-AREA
+           MOVE ZERO TO WS-EDITED-FIELDS
+           MOVE SPACES TO WS-FILE-STATUS
+           SET ACCOUNTS-NOT-EOF TO TRUE
+           SET TRANS-NOT-EOF TO TRUE
+           SET FILE-OK TO TRUE
+           SET BATCH-OK TO TRUE
+           SET MATCH-NOT-FOUND TO TRUE
+           SET ACCOUNTS-CLOSED TO TRUE
+           SET TRANS-CLOSED TO TRUE
+           SET RESULTS-CLOSED TO TRUE
+           SET ERRORS-CLOSED TO TRUE
+           SET REPORT-CLOSED TO TRUE
+
+           PERFORM 1010-OPEN-BATCH-FILES
+
+           IF FILE-ERROR
+               PERFORM 1190-CONTROLLED-ABEND
+           ELSE
+               PERFORM 1200-PRIME-INPUT-FILES
+               IF FILE-ERROR
+                   PERFORM 1190-CONTROLLED-ABEND
+               END-IF
+           END-IF.
+
+       1010-OPEN-BATCH-FILES.
+      * EN: Open input and output files in the required batch modes.
+      * EN: After OPEN, delegate status validation to a dedicated
+      * EN: paragraph so initialization stays readable.
+      *-----------
+      * ES: Abre los ficheros de entrada y salida en los modos batch.
+      * ES: Tras el OPEN, delega la validacion en un parrafo dedicado
+      * ES: para mantener legible la inicializacion.
            OPEN INPUT  ACCOUNTS-FILE
                        TRANS-FILE
                 OUTPUT RESULTS-FILE
                        ERRORS-FILE
                        REPORT-FILE
 
-           PERFORM 1100-CHECK-OPEN-STATUS
-           PERFORM 2100-READ-ACCOUNT
-           PERFORM 3100-READ-TRANS
-           .
+           PERFORM 1100-VALIDATE-OPEN-STATUS.
 
-       *> ------------------------------------------------------------------
-       *> EN: Technical validation of file open status.
-       *> ES: Validación técnica del estado de apertura de ficheros.
-       *> ------------------------------------------------------------------
-       1100-CHECK-OPEN-STATUS.
-           IF FS-ACCOUNTS NOT = "00"
+      * F3_P18
+      * EN: Display the technical error only once when batch start
+      * EN: fails during OPEN or first-read preparation.
+      * EN: Paths are resolved from the project root directory.
+      *-----------
+      * ES: Muestra el error tecnico una sola vez cuando el arranque
+      * ES: batch falla durante OPEN o durante la primera lectura.
+      * ES: Las rutas se resuelven desde la raiz del proyecto.
+       1100-VALIDATE-OPEN-STATUS.
+      * EN: Validate the FILE STATUS values produced by OPEN.
+      * EN: Any status different from 00 marks a technical open error.
+      * EN: Successfully opened files are flagged for controlled CLOSE.
+      *-----------
+      * ES: Valida los FILE STATUS producidos por OPEN.
+      * ES: Cualquier estado distinto de 00 marca error tecnico de apertura.
+      * ES: Los ficheros abiertos quedan marcados para CLOSE controlado.
+           IF FS-ACCOUNTS = '00'
+               SET ACCOUNTS-OPEN TO TRUE
+           END-IF
+
+           IF FS-TRANS = '00'
+               SET TRANS-OPEN TO TRUE
+           END-IF
+
+           IF FS-RESULTS = '00'
+               SET RESULTS-OPEN TO TRUE
+           END-IF
+
+           IF FS-ERRORS = '00'
+               SET ERRORS-OPEN TO TRUE
+           END-IF
+
+           IF FS-REPORT = '00'
+               SET REPORT-OPEN TO TRUE
+           END-IF
+
+           IF FS-ACCOUNTS NOT = '00'
+               SET FILE-ERROR TO TRUE
+               SET BATCH-ERROR TO TRUE
                MOVE 12 TO WS-RETURN-CODE
-               MOVE "E901" TO WS-ERROR-CODE
-               MOVE "ERROR APERTURA ACCOUNTS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
+               MOVE 'E901' TO WS-TEMP-ERR-CODE
+               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+               MOVE 'ACCOUNTS-FILE' TO WS-TEMP-ERR-FILE
+               MOVE FS-ACCOUNTS TO WS-TEMP-ERR-STATUS
+               MOVE 'OPEN' TO WS-TEMP-ERR-OPERATION
+               MOVE WS-ACCOUNTS-PATH TO WS-TEMP-ERR-PATH
+               MOVE 'OPEN FAILED FOR ACCOUNTS FILE'
+                   TO WS-TEMP-ERR-MESSAGE
            END-IF
 
-           IF FS-TRANS NOT = "00"
+           IF FILE-OK
+           AND FS-TRANS NOT = '00'
+               SET FILE-ERROR TO TRUE
+               SET BATCH-ERROR TO TRUE
                MOVE 12 TO WS-RETURN-CODE
-               MOVE "E901" TO WS-ERROR-CODE
-               MOVE "ERROR APERTURA TRANS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
+               MOVE 'E901' TO WS-TEMP-ERR-CODE
+               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+               MOVE 'TRANS-FILE' TO WS-TEMP-ERR-FILE
+               MOVE FS-TRANS TO WS-TEMP-ERR-STATUS
+               MOVE 'OPEN' TO WS-TEMP-ERR-OPERATION
+               MOVE WS-TRANS-PATH TO WS-TEMP-ERR-PATH
+               MOVE 'OPEN FAILED FOR TRANS FILE'
+                   TO WS-TEMP-ERR-MESSAGE
            END-IF
 
-           IF FS-RESULTS NOT = "00"
+           IF FILE-OK
+           AND FS-RESULTS NOT = '00'
+               SET FILE-ERROR TO TRUE
+               SET BATCH-ERROR TO TRUE
                MOVE 12 TO WS-RETURN-CODE
-               MOVE "E901" TO WS-ERROR-CODE
-               MOVE "ERROR APERTURA RESULTS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
+               MOVE 'E901' TO WS-TEMP-ERR-CODE
+               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+               MOVE 'RESULTS-FILE' TO WS-TEMP-ERR-FILE
+               MOVE FS-RESULTS TO WS-TEMP-ERR-STATUS
+               MOVE 'OPEN' TO WS-TEMP-ERR-OPERATION
+               MOVE WS-RESULTS-PATH TO WS-TEMP-ERR-PATH
+               MOVE 'OPEN FAILED FOR RESULTS FILE'
+                   TO WS-TEMP-ERR-MESSAGE
            END-IF
 
-           IF FS-ERRORS NOT = "00"
+           IF FILE-OK
+           AND FS-ERRORS NOT = '00'
+               SET FILE-ERROR TO TRUE
+               SET BATCH-ERROR TO TRUE
                MOVE 12 TO WS-RETURN-CODE
-               MOVE "E901" TO WS-ERROR-CODE
-               MOVE "ERROR APERTURA ERRORS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
+               MOVE 'E901' TO WS-TEMP-ERR-CODE
+               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+               MOVE 'ERRORS-FILE' TO WS-TEMP-ERR-FILE
+               MOVE FS-ERRORS TO WS-TEMP-ERR-STATUS
+               MOVE 'OPEN' TO WS-TEMP-ERR-OPERATION
+               MOVE WS-ERRORS-PATH TO WS-TEMP-ERR-PATH
+               MOVE 'OPEN FAILED FOR ERRORS FILE'
+                   TO WS-TEMP-ERR-MESSAGE
            END-IF
 
-           IF FS-REPORT NOT = "00"
+           IF FILE-OK
+           AND FS-REPORT NOT = '00'
+               SET FILE-ERROR TO TRUE
+               SET BATCH-ERROR TO TRUE
                MOVE 12 TO WS-RETURN-CODE
-               MOVE "E901" TO WS-ERROR-CODE
-               MOVE "ERROR APERTURA REPORT" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
-           END-IF
-           .
+               MOVE 'E901' TO WS-TEMP-ERR-CODE
+               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+               MOVE 'REPORT-FILE' TO WS-TEMP-ERR-FILE
+               MOVE FS-REPORT TO WS-TEMP-ERR-STATUS
+               MOVE 'OPEN' TO WS-TEMP-ERR-OPERATION
+               MOVE WS-REPORT-PATH TO WS-TEMP-ERR-PATH
+               MOVE 'OPEN FAILED FOR REPORT FILE'
+                   TO WS-TEMP-ERR-MESSAGE
+           END-IF.
 
-       *> ------------------------------------------------------------------
-       *> EN: Load account master rows into memory.
-       *> ES: Cargar en memoria el maestro de cuentas.
-       *>
-       *> EN: This keeps the later transaction validation simple and avoids
-       *> EN: re-reading the master file for each movement.
-       *> ES: Esto simplifica la validación posterior y evita releer el
-       *> ES: maestro por cada movimiento.
-       *> ------------------------------------------------------------------
-       2000-LOAD-ACCOUNTS.
-           IF END-OF-ACCOUNTS
-               EXIT PARAGRAPH
-           END-IF
+       1150-DISPLAY-TECHNICAL-ERROR.
+      * EN: Display the technical error detected during batch start.
+      * EN: The message includes the failing file, path, operation and
+      * EN: code so the execution context can be diagnosed quickly.
+      *-----------
+      * ES: Muestra el error tecnico detectado al arrancar el lote.
+      * ES: El mensaje incluye fichero, ruta, operacion y codigo para
+      * ES: diagnosticar rapido el contexto de ejecucion.
+           DISPLAY 'TECHNICAL BATCH ERROR'
+           DISPLAY 'FILE      : ' WS-TEMP-ERR-FILE
+           DISPLAY 'PATH      : ' WS-TEMP-ERR-PATH
+           DISPLAY 'OPERATION : ' WS-TEMP-ERR-OPERATION
+           DISPLAY 'FILESTAT  : ' WS-TEMP-ERR-STATUS
+           DISPLAY 'MESSAGE   : ' WS-TEMP-ERR-MESSAGE
+           DISPLAY 'ERR-CODE  : ' WS-TEMP-ERR-CODE
+           DISPLAY 'RET-CODE  : ' WS-RETURN-CODE.
 
-           ADD 1 TO CNT-ACCOUNTS-READ
+       1190-CONTROLLED-ABEND.
+      * EN: Execute a controlled technical stop for initialization errors.
+      * EN: The routine reports the error and closes only opened files.
+      *-----------
+      * ES: Ejecuta una parada tecnica controlada en inicializacion.
+      * ES: La rutina informa el error y cierra solo ficheros abiertos.
+           PERFORM 1150-DISPLAY-TECHNICAL-ERROR
+           PERFORM 9050-CLOSE-OPEN-FILES.
+      * EF3_P18
 
-           IF WS-ACCOUNT-COUNT >= 500
-               MOVE 16 TO WS-RETURN-CODE
-               MOVE "E902" TO WS-ERROR-CODE
-               MOVE "TABLA DE CUENTAS LLENA" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
-           END-IF
+       1200-PRIME-INPUT-FILES.
+      * EN: Read the first account and transaction records.
+      * EN: EOF is handled with status 10 and the related 88 flags.
+      * EN: Any other read status is treated as a technical batch error.
+      *-----------
+      * ES: Lee el primer registro de cuentas y transacciones.
+      * ES: El fin de fichero se gestiona con estado 10 y los 88.
+      * ES: Cualquier otro estado de lectura se trata como error tecnico.
+           PERFORM 1210-READ-FIRST-ACCOUNT
+           PERFORM 1220-READ-FIRST-TRANS.
 
-           ADD 1 TO WS-ACCOUNT-COUNT
-           MOVE ACCT-IBAN         TO T-ACCOUNT-IBAN
-                                     (WS-ACCOUNT-COUNT)
-           MOVE ACCT-NAME         TO T-ACCOUNT-NAME
-                                     (WS-ACCOUNT-COUNT)
-           MOVE ACCT-STATUS       TO T-ACCOUNT-STATUS
-                                     (WS-ACCOUNT-COUNT)
-           MOVE ACCT-CURRENCY     TO T-ACCOUNT-CURRENCY
-                                     (WS-ACCOUNT-COUNT)
-           MOVE ACCT-BALANCE      TO T-ACCOUNT-BALANCE
-                                     (WS-ACCOUNT-COUNT)
-           MOVE ACCT-LAST-UPD-UTC TO T-ACCOUNT-LAST-UPD-UTC
-                                     (WS-ACCOUNT-COUNT)
+       1210-READ-FIRST-ACCOUNT.
+           PERFORM 2100-READ-ACCOUNT.
 
-           PERFORM 2100-READ-ACCOUNT
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Read next account record.
-       *> ES: Leer el siguiente registro de cuenta.
-       *> ------------------------------------------------------------------
+      * F4_P19
        2100-READ-ACCOUNT.
+      * EN: Read the next account record and control EOF conditions.
+      * EN: Status 10 marks end of accounts, any other anomaly raises
+      * EN: technical error E903 without loading the internal table.
+      *-----------
+      * ES: Lee el siguiente registro de cuentas y controla el EOF.
+      * ES: El estado 10 marca fin de cuentas y cualquier anomalia
+      * ES: lanza el error tecnico E903 sin cargar aun la tabla.
            READ ACCOUNTS-FILE
                AT END
                    SET END-OF-ACCOUNTS TO TRUE
+               NOT AT END
+                   CONTINUE
            END-READ
 
-           IF FS-ACCOUNTS NOT = "00"
-              AND FS-ACCOUNTS NOT = "10"
-               MOVE 20 TO WS-RETURN-CODE
-               MOVE "E903" TO WS-ERROR-CODE
-               MOVE "ERROR LECTURA ACCOUNTS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
-           END-IF
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Process one transaction at a time.
-       *> ES: Procesar una transacción cada vez.
-       *> ------------------------------------------------------------------
-       3000-PROCESS-TRANSACTIONS.
-           IF END-OF-TRANS
-               EXIT PARAGRAPH
-           END-IF
-
-           ADD 1 TO CNT-TRANS-READ
-           PERFORM 3200-RESET-ERROR
-           PERFORM 3210-VALIDATE-TRANS
-
-           IF NO-ERROR
-               PERFORM 3300-APPLY-TRANS
-               PERFORM 3400-WRITE-RESULT
-               ADD 1 TO CNT-TRANS-OK
+           IF FS-ACCOUNTS = '10'
+               SET END-OF-ACCOUNTS TO TRUE
            ELSE
-               PERFORM 3500-WRITE-ERROR
-               ADD 1 TO CNT-TRANS-ERR
-           END-IF
+               IF FS-ACCOUNTS NOT = '00'
+                   SET FILE-ERROR TO TRUE
+                   SET BATCH-ERROR TO TRUE
+                   MOVE 16 TO WS-RETURN-CODE
+                   MOVE 'E903' TO WS-TEMP-ERR-CODE
+                   MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+                   MOVE 'ACCOUNTS-FILE' TO WS-TEMP-ERR-FILE
+                   MOVE FS-ACCOUNTS TO WS-TEMP-ERR-STATUS
+                   MOVE WS-ACCOUNTS-PATH TO WS-TEMP-ERR-PATH
+                   MOVE 'READ' TO WS-TEMP-ERR-OPERATION
+                   MOVE 'READ FAILED FOR ACCOUNTS FILE'
+                       TO WS-TEMP-ERR-MESSAGE
+               END-IF
+           END-IF.
+      * EF4_P19
 
-           PERFORM 3100-READ-TRANS
-           .
+      * F4_P21
+       1220-READ-FIRST-TRANS.
+           PERFORM 3100-READ-TRANS.
 
-       *> ------------------------------------------------------------------
-       *> EN: Read next transaction record.
-       *> ES: Leer el siguiente registro de transacción.
-       *> ------------------------------------------------------------------
        3100-READ-TRANS.
            READ TRANS-FILE
                AT END
                    SET END-OF-TRANS TO TRUE
+               NOT AT END
+                   CONTINUE
            END-READ
 
-           IF FS-TRANS NOT = "00"
-              AND FS-TRANS NOT = "10"
-               MOVE 20 TO WS-RETURN-CODE
-               MOVE "E903" TO WS-ERROR-CODE
-               MOVE "ERROR LECTURA TRANS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
-           END-IF
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Reset per-transaction error work area.
-       *> ES: Reiniciar el área de error por transacción.
-       *> ------------------------------------------------------------------
-       3200-RESET-ERROR.
-           MOVE "N"    TO WS-HAS-ERROR
-           MOVE SPACES TO WS-ERROR-CODE
-           MOVE SPACES TO WS-ERROR-TEXT
-           MOVE "F"    TO WS-ERROR-SEVERITY
-           MOVE ZERO   TO WS-FOUND-IDX
-           MOVE "N"    TO WS-ACCOUNT-FOUND
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Functional validation chain.
-       *> ES: Cadena de validaciones funcionales.
-       *>
-       *> EN: The order is intentional: first existence, then status, then
-       *> EN: basic transaction validity, then currency, then balance.
-       *> ES: El orden es intencional: primero existencia, después estado,
-       *> ES: validez básica de la transacción, divisa y por último saldo.
-       *> ------------------------------------------------------------------
-       3210-VALIDATE-TRANS.
-           PERFORM 3220-FIND-ACCOUNT
-
-           IF NOT ACCOUNT-FOUND
-               MOVE "Y" TO WS-HAS-ERROR
-               MOVE "E101" TO WS-ERROR-CODE
-               MOVE "CUENTA NO EXISTE" TO WS-ERROR-TEXT
-               EXIT PARAGRAPH
-           END-IF
-
-           IF T-ACCOUNT-STATUS (WS-FOUND-IDX) NOT = "A"
-               MOVE "Y" TO WS-HAS-ERROR
-               MOVE "E102" TO WS-ERROR-CODE
-               MOVE "CUENTA BLOQUEADA" TO WS-ERROR-TEXT
-               EXIT PARAGRAPH
-           END-IF
-
-           IF TRN-TYPE NOT = "D"
-              AND TRN-TYPE NOT = "C"
-               MOVE "Y" TO WS-HAS-ERROR
-               MOVE "E104" TO WS-ERROR-CODE
-               MOVE "TIPO OPERACION INVALIDO" TO WS-ERROR-TEXT
-               EXIT PARAGRAPH
-           END-IF
-
-           IF TRN-AMOUNT <= ZERO
-               MOVE "Y" TO WS-HAS-ERROR
-               MOVE "E105" TO WS-ERROR-CODE
-               MOVE "IMPORTE NO VALIDO" TO WS-ERROR-TEXT
-               EXIT PARAGRAPH
-           END-IF
-
-           IF TRN-CURRENCY NOT =
-              T-ACCOUNT-CURRENCY (WS-FOUND-IDX)
-               MOVE "Y" TO WS-HAS-ERROR
-               MOVE "E106" TO WS-ERROR-CODE
-               MOVE "DIVISA NO COINCIDE" TO WS-ERROR-TEXT
-               EXIT PARAGRAPH
-           END-IF
-
-           IF TRN-TYPE = "D"
-               IF T-ACCOUNT-BALANCE (WS-FOUND-IDX) <
-                  TRN-AMOUNT
-                   MOVE "Y" TO WS-HAS-ERROR
-                   MOVE "E103" TO WS-ERROR-CODE
-                   MOVE "SALDO INSUFICIENTE" TO WS-ERROR-TEXT
-                   EXIT PARAGRAPH
+           IF FS-TRANS = '10'
+               SET END-OF-TRANS TO TRUE
+           ELSE
+               IF FS-TRANS NOT = '00'
+                   SET FILE-ERROR TO TRUE
+                   SET BATCH-ERROR TO TRUE
+                   MOVE 16 TO WS-RETURN-CODE
+                   MOVE 'E903' TO WS-TEMP-ERR-CODE
+                   MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+                   MOVE 'TRANS-FILE' TO WS-TEMP-ERR-FILE
+                   MOVE FS-TRANS TO WS-TEMP-ERR-STATUS
+                   MOVE WS-TRANS-PATH TO WS-TEMP-ERR-PATH
+                   MOVE 'READ' TO WS-TEMP-ERR-OPERATION
+                   MOVE 'READ FAILED FOR TRANS FILE'
+                       TO WS-TEMP-ERR-MESSAGE
                END-IF
-           END-IF
-           .
+           END-IF.
+      * EF4_P21
 
-       *> ------------------------------------------------------------------
-       *> EN: Locate the account in the in-memory master table.
-       *> ES: Localizar la cuenta en la tabla maestra en memoria.
-       *> ------------------------------------------------------------------
-       3220-FIND-ACCOUNT.
-           MOVE ZERO TO WS-FOUND-IDX
-           MOVE "N"  TO WS-ACCOUNT-FOUND
+      * F4_P20
+       2000-LOAD-ACCOUNTS.
+      * EN: Load each primed account record into the internal table.
+      * EN: Control the table capacity and raise technical error E902
+      * EN: when the OCCURS limit is exceeded.
+      *-----------
+      * ES: Carga cada registro de cuentas ya leido en la tabla interna.
+      * ES: Controla la capacidad de la tabla y lanza el error tecnico
+      * ES: E902 cuando se supera el limite del OCCURS.
+           PERFORM UNTIL END-OF-ACCOUNTS OR FILE-ERROR
+               IF WS-LOADED-ACCOUNT-COUNT >= 500
+                   SET FILE-ERROR TO TRUE
+                   SET BATCH-ERROR TO TRUE
+                   MOVE 12 TO WS-RETURN-CODE
+                   MOVE 'E902' TO WS-TEMP-ERR-CODE
+                   MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+                   MOVE 'ACCOUNTS-FILE' TO WS-TEMP-ERR-FILE
+                   MOVE FS-ACCOUNTS TO WS-TEMP-ERR-STATUS
+                   MOVE WS-ACCOUNTS-PATH TO WS-TEMP-ERR-PATH
+                   MOVE 'LOAD-TABLE' TO WS-TEMP-ERR-OPERATION
+                   MOVE 'ACCOUNT TABLE CAPACITY EXCEEDED'
+                       TO WS-TEMP-ERR-MESSAGE
+               ELSE
+                   IF ACCT-BALANCE NUMERIC
+                       ADD 1 TO WS-LOADED-ACCOUNT-COUNT
+                       ADD 1 TO CNT-ACCOUNTS-READ
+                       MOVE WS-LOADED-ACCOUNT-COUNT
+                           TO WS-ACCOUNT-STORE-IDX
 
-           PERFORM VARYING WS-SEARCH-IDX FROM 1 BY 1
-               UNTIL WS-SEARCH-IDX > WS-ACCOUNT-COUNT
-                  OR ACCOUNT-FOUND
-               IF T-ACCOUNT-IBAN (WS-SEARCH-IDX) =
-                  TRN-ACCOUNT-IBAN
-                   MOVE WS-SEARCH-IDX TO WS-FOUND-IDX
-                   MOVE "Y" TO WS-ACCOUNT-FOUND
+                       MOVE ACCT-IBAN
+                           TO WS-TBL-ACCOUNT-IBAN (WS-ACCOUNT-STORE-IDX)
+                       MOVE ACCT-NAME
+                           TO WS-TBL-ACCOUNT-NAME (WS-ACCOUNT-STORE-IDX)
+                       MOVE ACCT-STATUS
+                           TO WS-TBL-ACCOUNT-STATUS
+                           (WS-ACCOUNT-STORE-IDX)
+                       MOVE ACCT-CURRENCY
+                           TO WS-TBL-ACCOUNT-CURRENCY
+                           (WS-ACCOUNT-STORE-IDX)
+                       MOVE ACCT-BALANCE
+                           TO WS-TBL-ACCOUNT-BALANCE
+                              (WS-ACCOUNT-STORE-IDX)
+                       MOVE ACCT-LAST-UPD-UTC
+                           TO WS-TBL-ACCOUNT-LAST-UPD-UTC
+                              (WS-ACCOUNT-STORE-IDX)
+
+                       PERFORM 2100-READ-ACCOUNT
+                   ELSE
+                       SET FILE-ERROR TO TRUE
+                       SET BATCH-ERROR TO TRUE
+                       MOVE 16 TO WS-RETURN-CODE
+                       MOVE 'E903' TO WS-TEMP-ERR-CODE
+                       MOVE 'T' TO WS-TEMP-ERR-SEVERITY
+                       MOVE 'ACCOUNTS-FILE' TO WS-TEMP-ERR-FILE
+                       MOVE FS-ACCOUNTS TO WS-TEMP-ERR-STATUS
+                       MOVE WS-ACCOUNTS-PATH TO WS-TEMP-ERR-PATH
+                       MOVE 'LOAD-TABLE' TO WS-TEMP-ERR-OPERATION
+                       MOVE 'INVALID NUMERIC BALANCE IN ACCOUNTS FILE'
+                           TO WS-TEMP-ERR-MESSAGE
+                   END-IF
                END-IF
            END-PERFORM
-           .
 
-       *> ------------------------------------------------------------------
-       *> EN: Apply the valid transaction and update totals.
-       *> ES: Aplicar la transacción válida y actualizar acumulados.
-       *> ------------------------------------------------------------------
-       3300-APPLY-TRANS.
-           EVALUATE TRN-TYPE
-               WHEN "D"
-                   SUBTRACT TRN-AMOUNT
-                       FROM T-ACCOUNT-BALANCE (WS-FOUND-IDX)
-                   ADD TRN-AMOUNT TO AMT-DEBIT-TOTAL
-               WHEN "C"
-                   ADD TRN-AMOUNT
-                       TO T-ACCOUNT-BALANCE (WS-FOUND-IDX)
-                   ADD TRN-AMOUNT TO AMT-CREDIT-TOTAL
-           END-EVALUATE
+           IF FILE-ERROR
+               PERFORM 1190-CONTROLLED-ABEND
+           END-IF.
+      * EF4_P20
 
-           MOVE T-ACCOUNT-BALANCE (WS-FOUND-IDX)
-             TO WS-NEW-BALANCE
-           .
+      * F4_P22
+       3000-PROCESS-TRANSACTIONS.
+      * EN: Process one primed transaction per iteration until EOF.
+      * EN: Each loop increments the read counter, resets the current
+      * EN: error context, validates the transaction, routes the output
+      * EN: to results or errors, and reads the next transaction.
+      *-----------
+      * ES: Procesa una transaccion ya preparada por iteracion hasta EOF.
+      * ES: Cada vuelta incrementa el contador leido, reinicia el error
+      * ES: actual, valida la transaccion, decide salida a resultados o
+      * ES: errores y lee la siguiente transaccion.
+           PERFORM UNTIL END-OF-TRANS OR FILE-ERROR
+               ADD 1 TO CNT-TRANS-READ
 
-       *> ------------------------------------------------------------------
-       *> EN: Write one successful result record.
-       *> ES: Escribir un registro de resultado correcto.
-       *> ------------------------------------------------------------------
+               PERFORM 3200-RESET-TRANSACTION-STATE
+               PERFORM 3300-VALIDATE-TRANSACTION
+
+               IF FILE-OK
+                   IF WS-TEMP-ERR-CODE = SPACES
+                       PERFORM 3400-WRITE-RESULT
+                   ELSE
+                       PERFORM 3500-WRITE-ERROR
+                   END-IF
+               END-IF
+
+               IF FILE-OK
+                   PERFORM 3100-READ-TRANS
+               END-IF
+           END-PERFORM
+
+           IF FILE-ERROR
+               PERFORM 1190-CONTROLLED-ABEND
+           END-IF.
+
+       3200-RESET-TRANSACTION-STATE.
+      * EN: Reset the per-transaction working state before validation.
+      * EN: Detailed initialization of functional areas will be added
+      * EN: in later steps.
+      *-----------
+      * ES: Reinicia el estado de trabajo por transaccion antes de validar.
+      * ES: La inicializacion detallada de areas funcionales se añadira
+      * ES: en pasos posteriores.
+           MOVE SPACES TO WS-TEMP-ERROR-AREA
+           SET MATCH-NOT-FOUND TO TRUE.
+
+       3300-VALIDATE-TRANSACTION.
+      * EN: Placeholder for the functional transaction validation flow.
+      * EN: Future steps will resolve account lookup and business rules.
+      *-----------
+      * ES: Marcador para el flujo de validacion funcional.
+      * ES: En pasos futuros resolvera busqueda de cuenta y reglas.
+           CONTINUE.
+
        3400-WRITE-RESULT.
-           MOVE SPACES TO RESULTS-RECORD
-           MOVE TRN-ID            TO RES-TRN-ID
-           MOVE TRN-ACCOUNT-IBAN  TO RES-ACCOUNT-IBAN
-           MOVE TRN-TYPE          TO RES-TYPE
-           MOVE TRN-AMOUNT        TO RES-AMOUNT
-           MOVE TRN-CURRENCY      TO RES-CURRENCY
-           MOVE WS-NEW-BALANCE    TO RES-NEW-BALANCE
-           MOVE "APLICADA"        TO RES-STATUS
-           MOVE "OPERACION OK"    TO RES-MESSAGE
+      * EN: Placeholder for successful transaction output.
+      * EN: Future steps will populate RESULTS-RECORD and WRITE it.
+      *-----------
+      * ES: Marcador para la salida de transacciones correctas.
+      * ES: En pasos futuros rellenara RESULTS-RECORD y hara WRITE.
+           CONTINUE.
 
-           WRITE RESULTS-RECORD
-
-           IF FS-RESULTS NOT = "00"
-               MOVE 24 TO WS-RETURN-CODE
-               MOVE "E904" TO WS-ERROR-CODE
-               MOVE "ERROR ESCRITURA RESULTS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
-           END-IF
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Write one rejected transaction record.
-       *> ES: Escribir un registro de transacción rechazada.
-       *> ------------------------------------------------------------------
        3500-WRITE-ERROR.
-           MOVE SPACES TO ERRORS-RECORD
-           MOVE TRN-ID            TO ERR-TRN-ID
-           MOVE TRN-ACCOUNT-IBAN  TO ERR-ACCOUNT-IBAN
-           MOVE WS-ERROR-CODE     TO ERR-CODE
-           MOVE WS-ERROR-SEVERITY TO ERR-SEVERITY
-           MOVE TRN-AMOUNT        TO ERR-AMOUNT
-           MOVE WS-ERROR-TEXT     TO ERR-MESSAGE
+      * EN: Placeholder for error transaction output.
+      * EN: Future steps will populate ERRORS-RECORD and WRITE it.
+      *-----------
+      * ES: Marcador para la salida de transacciones con error.
+      * ES: En pasos futuros rellenara ERRORS-RECORD y hara WRITE.
+           CONTINUE.
+      * EF4_P22
 
-           WRITE ERRORS-RECORD
-
-           IF FS-ERRORS NOT = "00"
-               MOVE 24 TO WS-RETURN-CODE
-               MOVE "E904" TO WS-ERROR-CODE
-               MOVE "ERROR ESCRITURA ERRORS" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
-           END-IF
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Final reporting and clean close.
-       *> ES: Informe final y cierre limpio.
-       *> ------------------------------------------------------------------
        9000-FINALIZE.
-           PERFORM 9100-WRITE-REPORT
+      * EN: Close the files.
+      *-----------
+      * ES: Cierra los ficheros.
+           PERFORM 9050-CLOSE-OPEN-FILES.
 
-           CLOSE ACCOUNTS-FILE
-                 TRANS-FILE
-                 RESULTS-FILE
-                 ERRORS-FILE
-                 REPORT-FILE
-           .
-
-       *> ------------------------------------------------------------------
-       *> EN: Build the plain text execution report.
-       *> ES: Construir el informe de ejecución en texto plano.
-       *> ------------------------------------------------------------------
-       9100-WRITE-REPORT.
-           MOVE ALL "-" TO REPORT-LINE
-           WRITE REPORT-LINE
-
-           MOVE SPACES TO REPORT-LINE
-           MOVE "HISPALIS FINRECON - RESUMEN DE EJECUCION"
-             TO REPORT-LINE
-           WRITE REPORT-LINE
-
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "FECHA PROCESO    : " DELIMITED BY SIZE
-               WS-PROCESS-DATE        DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "HORA PROCESO     : " DELIMITED BY SIZE
-               WS-PROCESS-TIME        DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE CNT-ACCOUNTS-READ TO ED-COUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "CUENTAS CARGADAS : " DELIMITED BY SIZE
-               ED-COUNT              DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE CNT-TRANS-READ TO ED-COUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "TRANS LEIDAS     : " DELIMITED BY SIZE
-               ED-COUNT              DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE CNT-TRANS-OK TO ED-COUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "TRANS OK         : " DELIMITED BY SIZE
-               ED-COUNT              DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE CNT-TRANS-ERR TO ED-COUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "TRANS ERROR      : " DELIMITED BY SIZE
-               ED-COUNT              DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE AMT-DEBIT-TOTAL TO ED-AMOUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "TOTAL DEBITADO   : " DELIMITED BY SIZE
-               ED-AMOUNT             DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE AMT-CREDIT-TOTAL TO ED-AMOUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "TOTAL ACREDITADO : " DELIMITED BY SIZE
-               ED-AMOUNT             DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE WS-RETURN-CODE TO ED-COUNT
-           MOVE SPACES TO REPORT-LINE
-           STRING
-               "RETURN CODE      : " DELIMITED BY SIZE
-               ED-COUNT              DELIMITED BY SIZE
-               INTO REPORT-LINE
-           END-STRING
-           WRITE REPORT-LINE
-
-           MOVE ALL "-" TO REPORT-LINE
-           WRITE REPORT-LINE
-
-           IF FS-REPORT NOT = "00"
-               MOVE 24 TO WS-RETURN-CODE
-               MOVE "E904" TO WS-ERROR-CODE
-               MOVE "ERROR ESCRITURA REPORT" TO WS-ERROR-TEXT
-               PERFORM 8100-ABEND
+       9050-CLOSE-OPEN-FILES.
+      * EN: Close only the files that were successfully opened.
+      * EN: This supports both normal end and controlled ABEND.
+      *-----------
+      * ES: Cierra solo los ficheros abiertos correctamente.
+      * ES: Soporta tanto fin normal como ABEND controlado.
+           IF ACCOUNTS-OPEN
+               CLOSE ACCOUNTS-FILE
+               SET ACCOUNTS-CLOSED TO TRUE
            END-IF
-           .
 
-       *> ------------------------------------------------------------------
-       *> EN: Emergency stop after technical failure.
-       *> ES: Salida de emergencia tras fallo técnico.
-       *> ------------------------------------------------------------------
-       8100-ABEND.
-           CLOSE ACCOUNTS-FILE
-                 TRANS-FILE
-                 RESULTS-FILE
-                 ERRORS-FILE
-                 REPORT-FILE
+           IF TRANS-OPEN
+               CLOSE TRANS-FILE
+               SET TRANS-CLOSED TO TRUE
+           END-IF
 
-           MOVE WS-RETURN-CODE TO RETURN-CODE
-           GOBACK
-           .
+           IF RESULTS-OPEN
+               CLOSE RESULTS-FILE
+               SET RESULTS-CLOSED TO TRUE
+           END-IF
+
+           IF ERRORS-OPEN
+               CLOSE ERRORS-FILE
+               SET ERRORS-CLOSED TO TRUE
+           END-IF
+
+           IF REPORT-OPEN
+               CLOSE REPORT-FILE
+               SET REPORT-CLOSED TO TRUE
+           END-IF.
+      * EF3_P16
