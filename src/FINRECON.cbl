@@ -178,6 +178,26 @@
            05  WS-ED-RETURN-CODE      PIC ZZZZZZ9.
            05  WS-ED-AMOUNT           PIC ZZZZZZZZZ99.99.
 
+<<<<<<< HEAD
+      * F5_P23
+       01  WS-TRANS-ERROR-CONTEXT.
+           05  WS-HAS-ERROR-SW        PIC X VALUE 'N'.
+               88  WS-HAS-ERROR       VALUE 'Y'.
+               88  WS-NO-ERROR        VALUE 'N'.
+
+       01  WS-TEMP-ERROR-AREA.
+           05  WS-TEMP-ERR-CODE       PIC X(04) VALUE SPACES.
+           05  WS-TEMP-ERR-SEVERITY   PIC X(01) VALUE SPACES.
+           05  WS-TEMP-ERR-MESSAGE    PIC X(40) VALUE SPACES.
+           05  WS-TEMP-ERR-FILE       PIC X(20) VALUE SPACES.
+           05  WS-TEMP-ERR-STATUS     PIC X(02) VALUE SPACES.
+           05  WS-TEMP-ERR-OPERATION  PIC X(20) VALUE SPACES.
+           05  WS-TEMP-ERR-PATH       PIC X(80) VALUE SPACES.
+      * EF5_P23
+      * EF2_P14
+
+
+=======
        01  WS-TEMP-ERROR-AREA.
            05  WS-TEMP-ERR-CODE       PIC X(04) VALUE SPACES.
            05  WS-TEMP-ERR-SEVERITY   PIC X(01) VALUE SPACES.
@@ -189,6 +209,7 @@
       * EF2_P14
 
 
+>>>>>>> 5c3adea62037c0213da852719003049891d71b94
       * F2_P15
       * EN: Internal account table sized for moderate batch tests.
       * EN: Each entry mirrors the functional account layout in memory.
@@ -598,7 +619,11 @@
            PERFORM UNTIL END-OF-TRANS OR FILE-ERROR
                ADD 1 TO CNT-TRANS-READ
 
+<<<<<<< HEAD
+               PERFORM 3200-RESET-ERROR
+=======
                PERFORM 3200-RESET-TRANSACTION-STATE
+>>>>>>> 5c3adea62037c0213da852719003049891d71b94
                PERFORM 3300-VALIDATE-TRANSACTION
 
                IF FILE-OK
@@ -618,6 +643,134 @@
                PERFORM 1190-CONTROLLED-ABEND
            END-IF.
 
+<<<<<<< HEAD
+      * F5_P23
+       3200-RESET-ERROR.
+      * EN: Reset the per-transaction error context before validation.
+      * EN: Leave all functional indicators in a neutral and repeatable
+      * EN: state for the current transaction.
+      *-----------
+      * ES: Reinicia el contexto de error por transaccion antes de validar.
+      * ES: Deja todos los indicadores funcionales en un estado neutro
+      * ES: y repetible para la transaccion actual.
+           SET WS-NO-ERROR TO TRUE
+           MOVE SPACES TO WS-TEMP-ERROR-AREA
+           MOVE ZERO TO WS-ACCOUNT-SEARCH-IDX
+           SET MATCH-NOT-FOUND TO TRUE.
+      * EF5_P23
+
+      * F5_P24
+       3220-FIND-ACCOUNT.
+      * EN: Search the internal account table for the transaction IBAN.
+      * EN: Return the located index and the match flag, stopping the
+      * EN: scan as soon as the account is found.
+      *-----------
+      * ES: Busca en la tabla interna la cuenta de la transaccion.
+      * ES: Devuelve el indice localizado y el flag de coincidencia,
+      * ES: cortando el recorrido en cuanto aparece la cuenta.
+           MOVE ZERO TO WS-ACCOUNT-SEARCH-IDX
+           MOVE ZERO TO WS-ACCOUNT-STORE-IDX
+           SET MATCH-NOT-FOUND TO TRUE
+
+           IF WS-LOADED-ACCOUNT-COUNT > ZERO
+               PERFORM VARYING WS-ACCOUNT-SEARCH-IDX
+                   FROM 1 BY 1
+                   UNTIL WS-ACCOUNT-SEARCH-IDX
+                       > WS-LOADED-ACCOUNT-COUNT
+                      OR MATCH-FOUND
+                   IF WS-TBL-ACCOUNT-IBAN (WS-ACCOUNT-SEARCH-IDX)
+                       = TRN-ACCOUNT-IBAN
+                       MOVE WS-ACCOUNT-SEARCH-IDX
+                           TO WS-ACCOUNT-STORE-IDX
+                       SET MATCH-FOUND TO TRUE
+                   END-IF
+               END-PERFORM
+           END-IF
+
+           IF MATCH-FOUND
+               MOVE WS-ACCOUNT-STORE-IDX TO WS-ACCOUNT-SEARCH-IDX
+           ELSE
+               MOVE ZERO TO WS-ACCOUNT-SEARCH-IDX
+           END-IF.
+      * EF5_P24
+
+      * F5_P25
+      * F5_P26
+      * F5_P29
+       3210-VALIDATE-TRANS.
+      * EN: Validate the current transaction against functional rules.
+      * EN: First ensure the account exists in memory and, if not,
+      * EN: raise functional error E101 and leave the validation flow.
+      * EN: Then ensure the located account is active; otherwise raise
+      * EN: functional error E102 and stop validating this transaction.
+      * EN: Next ensure the transaction currency matches the account
+      * EN: currency; otherwise raise functional error E106.
+      * EN: For debit operations, also require enough available balance;
+      * EN: otherwise raise functional error E103.
+      *-----------
+      * ES: Valida la transaccion actual contra reglas funcionales.
+      * ES: Primero comprueba que la cuenta exista en memoria y, si no,
+      * ES: informa el error funcional E101 y corta la validacion.
+      * ES: Despues comprueba que la cuenta este activa; si no, informa
+      * ES: el error funcional E102 y termina esa validacion.
+      * ES: A continuacion comprueba que la divisa de la transaccion
+      * ES: coincida con la de la cuenta; si no, informa el E106.
+      * ES: Para operaciones de debito, ademas exige saldo suficiente;
+      * ES: en caso contrario informa el error funcional E103.
+           PERFORM 3220-FIND-ACCOUNT
+
+           IF MATCH-NOT-FOUND
+               SET WS-HAS-ERROR TO TRUE
+               MOVE 'E101' TO WS-TEMP-ERR-CODE
+               MOVE 'F' TO WS-TEMP-ERR-SEVERITY
+               MOVE 'ACCOUNT NOT FOUND FOR TRANSACTION'
+                   TO WS-TEMP-ERR-MESSAGE
+           ELSE
+               IF WS-TBL-ACCOUNT-STATUS (WS-ACCOUNT-SEARCH-IDX) NOT = 'A'
+                   SET WS-HAS-ERROR TO TRUE
+                   MOVE 'E102' TO WS-TEMP-ERR-CODE
+                   MOVE 'F' TO WS-TEMP-ERR-SEVERITY
+                   MOVE 'CUENTA BLOQUEADA O INACTIVA'
+                       TO WS-TEMP-ERR-MESSAGE
+               ELSE
+                   IF TRN-CURRENCY NOT =
+                       WS-TBL-ACCOUNT-CURRENCY (WS-ACCOUNT-SEARCH-IDX)
+                       SET WS-HAS-ERROR TO TRUE
+                       MOVE 'E106' TO WS-TEMP-ERR-CODE
+                       MOVE 'F' TO WS-TEMP-ERR-SEVERITY
+                       MOVE 'DIVISA DE TRANSACCION NO COHERENTE'
+                           TO WS-TEMP-ERR-MESSAGE
+                   ELSE
+      * F5_P30
+                       IF TRN-TYPE = 'D'
+                          AND WS-TBL-ACCOUNT-BALANCE
+                              (WS-ACCOUNT-SEARCH-IDX) < TRN-AMOUNT
+                           SET WS-HAS-ERROR TO TRUE
+                           MOVE 'E103' TO WS-TEMP-ERR-CODE
+                           MOVE 'F' TO WS-TEMP-ERR-SEVERITY
+                           MOVE 'SALDO INSUFICIENTE PARA DEBITO'
+                               TO WS-TEMP-ERR-MESSAGE
+                       ELSE
+      * EN: Extension point for the following functional validations.
+      * ES: Punto de extension para las siguientes validaciones.
+                           CONTINUE
+                       END-IF
+      * EF5_P30
+                   END-IF
+               END-IF
+           END-IF.
+
+       3300-VALIDATE-TRANSACTION.
+      * EN: Compatibility wrapper for the functional validation flow.
+      * EN: Delegate the current transaction validation to 3210.
+      *-----------
+      * ES: Envoltorio de compatibilidad del flujo de validacion.
+      * ES: Delega la validacion actual de la transaccion en 3210.
+           PERFORM 3210-VALIDATE-TRANS.
+      * EF5_P29
+      * EF5_P26
+      * EF5_P25
+=======
        3200-RESET-TRANSACTION-STATE.
       * EN: Reset the per-transaction working state before validation.
       * EN: Detailed initialization of functional areas will be added
@@ -636,6 +789,7 @@
       * ES: Marcador para el flujo de validacion funcional.
       * ES: En pasos futuros resolvera busqueda de cuenta y reglas.
            CONTINUE.
+>>>>>>> 5c3adea62037c0213da852719003049891d71b94
 
        3400-WRITE-RESULT.
       * EN: Placeholder for successful transaction output.
