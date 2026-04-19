@@ -439,19 +439,13 @@
            DISPLAY 'RET-CODE  : ' WS-RETURN-CODE.
 
        1190-CONTROLLED-ABEND.
-      * EN: Execute a controlled technical stop for fatal batch errors.
-      * EN: The routine reports the error, closes opened files and
-      * EN: returns the batch return code immediately.
+      * EN: Execute a controlled technical stop for initialization errors.
+      * EN: The routine reports the error and closes only opened files.
       *-----------
-      * ES: Ejecuta una parada tecnica controlada para errores fatales.
-      * ES: La rutina informa el error, cierra ficheros abiertos y
-      * ES: devuelve de inmediato el codigo de retorno del batch.
+      * ES: Ejecuta una parada tecnica controlada en inicializacion.
+      * ES: La rutina informa el error y cierra solo ficheros abiertos.
            PERFORM 1150-DISPLAY-TECHNICAL-ERROR
-      * F7_P35
-           PERFORM 9050-CLOSE-OPEN-FILES
-           MOVE WS-RETURN-CODE TO RETURN-CODE
-           GOBACK.
-      * EF7_P35
+           PERFORM 9050-CLOSE-OPEN-FILES.
       * EF3_P18
 
        1200-PRIME-INPUT-FILES.
@@ -722,8 +716,7 @@
                MOVE 'ACCOUNT NOT FOUND FOR TRANSACTION'
                    TO WS-TEMP-ERR-MESSAGE
            ELSE
-               IF WS-TBL-ACCOUNT-STATUS (WS-ACCOUNT-SEARCH-IDX)
-                   NOT = 'A'
+               IF WS-TBL-ACCOUNT-STATUS (WS-ACCOUNT-SEARCH-IDX) NOT = 'A'
                    SET WS-HAS-ERROR TO TRUE
                    MOVE 'E102' TO WS-TEMP-ERR-CODE
                    MOVE 'F' TO WS-TEMP-ERR-SEVERITY
@@ -795,237 +788,28 @@
                TO WS-TBL-ACCOUNT-BALANCE (WS-ACCOUNT-SEARCH-IDX).
       * EF6_P31
 
-      * F6_P32
        3400-WRITE-RESULT.
-      * EN: Populate the successful output record and write it to
-      * EN: RESULTS.DAT. Any write anomaly raises technical error E904.
+      * EN: Placeholder for successful transaction output.
+      * EN: Future steps will populate RESULTS-RECORD and WRITE it.
       *-----------
-      * ES: Rellena el registro de salida correcta y lo escribe en
-      * ES: RESULTS.DAT. Cualquier anomalia de escritura lanza E904.
-           MOVE TRN-ID                  TO RES-TRN-ID
-           MOVE TRN-ACCOUNT-IBAN        TO RES-ACCOUNT-IBAN
-           MOVE TRN-TYPE                TO RES-TYPE
-           MOVE TRN-AMOUNT              TO RES-AMOUNT
-           MOVE TRN-CURRENCY            TO RES-CURRENCY
-           MOVE WS-NEW-BALANCE          TO RES-NEW-BALANCE
-           MOVE 'APLICADA'              TO RES-STATUS
-           MOVE 'OPERACION OK'          TO RES-MESSAGE
+      * ES: Marcador para la salida de transacciones correctas.
+      * ES: En pasos futuros rellenara RESULTS-RECORD y hara WRITE.
+           CONTINUE.
 
-           WRITE RESULTS-RECORD
-
-           IF FS-RESULTS = '00'
-               ADD 1 TO CNT-TRANS-OK
-           ELSE
-               SET FILE-ERROR TO TRUE
-               SET BATCH-ERROR TO TRUE
-               MOVE 16 TO WS-RETURN-CODE
-               MOVE 'E904' TO WS-TEMP-ERR-CODE
-               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
-               MOVE 'RESULTS-FILE' TO WS-TEMP-ERR-FILE
-               MOVE FS-RESULTS TO WS-TEMP-ERR-STATUS
-               MOVE WS-RESULTS-PATH TO WS-TEMP-ERR-PATH
-               MOVE 'WRITE' TO WS-TEMP-ERR-OPERATION
-               MOVE 'WRITE FAILED FOR RESULTS FILE'
-                   TO WS-TEMP-ERR-MESSAGE
-           END-IF.
-      * EF6_P32
-
-      * F6_P33
        3500-WRITE-ERROR.
-      * EN: Populate the rejected transaction record and write it to
-      * EN: ERRORS.DAT. Functional errors are logged and the batch
-      * EN: continues; only a write anomaly raises technical E904.
+      * EN: Placeholder for error transaction output.
+      * EN: Future steps will populate ERRORS-RECORD and WRITE it.
       *-----------
-      * ES: Rellena el registro de transaccion rechazada y lo escribe
-      * ES: en ERRORS.DAT. Los errores funcionales se registran y el
-      * ES: batch continua; solo un fallo de escritura lanza E904.
-           MOVE TRN-ID                  TO ERR-TRN-ID
-           MOVE TRN-ACCOUNT-IBAN        TO ERR-ACCOUNT-IBAN
-           MOVE WS-TEMP-ERR-CODE        TO ERR-CODE
-           MOVE WS-TEMP-ERR-SEVERITY    TO ERR-SEVERITY
-           MOVE TRN-AMOUNT              TO ERR-AMOUNT
-           MOVE WS-TEMP-ERR-MESSAGE     TO ERR-MESSAGE
-
-           WRITE ERRORS-RECORD
-
-           IF FS-ERRORS = '00'
-               ADD 1 TO CNT-TRANS-ERR
-           ELSE
-               SET FILE-ERROR TO TRUE
-               SET BATCH-ERROR TO TRUE
-               MOVE 16 TO WS-RETURN-CODE
-               MOVE 'E904' TO WS-TEMP-ERR-CODE
-               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
-               MOVE 'ERRORS-FILE' TO WS-TEMP-ERR-FILE
-               MOVE FS-ERRORS TO WS-TEMP-ERR-STATUS
-               MOVE WS-ERRORS-PATH TO WS-TEMP-ERR-PATH
-               MOVE 'WRITE' TO WS-TEMP-ERR-OPERATION
-               MOVE 'WRITE FAILED FOR ERRORS FILE'
-                   TO WS-TEMP-ERR-MESSAGE
-           END-IF.
-      * EF6_P33
+      * ES: Marcador para la salida de transacciones con error.
+      * ES: En pasos futuros rellenara ERRORS-RECORD y hara WRITE.
+           CONTINUE.
       * EF4_P22
 
-      * F7_P35
        9000-FINALIZE.
-      * EN: Finalize the batch with report generation, file closure
-      * EN: and propagation of the program return code.
+      * EN: Close the files.
       *-----------
-      * ES: Finaliza el lote con generacion del reporte, cierre de
-      * ES: ficheros y propagacion del codigo de retorno.
-      * F7_P34
-           IF REPORT-OPEN AND FILE-OK
-               PERFORM 9100-WRITE-REPORT
-           END-IF
-      * EF7_P34
-           PERFORM 9050-CLOSE-OPEN-FILES
-           MOVE WS-RETURN-CODE TO RETURN-CODE.
-      * EF7_P35
-
-      * F7_P34
-       9100-WRITE-REPORT.
-      * EN: Write the final execution summary into REPORT.TXT using
-      * EN: readable counters and formatted financial totals.
-      *-----------
-      * ES: Escribe el resumen final de ejecucion en REPORT.TXT usando
-      * ES: contadores legibles y totales financieros formateados.
-           MOVE ALL '-' TO REPORT-RECORD
-           PERFORM 9110-WRITE-REPORT-LINE
-
-           IF FILE-OK
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'HISPALIS FINRECON - RESUMEN DE EJECUCION'
-                       DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'FECHA PROCESO    : ' DELIMITED BY SIZE
-                   WS-PROCESS-DATE   DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'HORA PROCESO     : ' DELIMITED BY SIZE
-                   WS-PROCESS-TIME   DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE CNT-ACCOUNTS-READ TO WS-ED-COUNT
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'CUENTAS CARGADAS : ' DELIMITED BY SIZE
-                   WS-ED-COUNT        DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE CNT-TRANS-READ TO WS-ED-COUNT
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'TRANS LEIDAS     : ' DELIMITED BY SIZE
-                   WS-ED-COUNT       DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE CNT-TRANS-OK TO WS-ED-COUNT
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'TRANS OK         : ' DELIMITED BY SIZE
-                   WS-ED-COUNT       DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE CNT-TRANS-ERR TO WS-ED-COUNT
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'TRANS ERROR      : ' DELIMITED BY SIZE
-                   WS-ED-COUNT       DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE AMT-DEBIT-TOTAL TO WS-ED-AMOUNT
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'TOTAL DEBITADO   : ' DELIMITED BY SIZE
-                   WS-ED-AMOUNT      DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE AMT-CREDIT-TOTAL TO WS-ED-AMOUNT
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'TOTAL ACREDITADO : ' DELIMITED BY SIZE
-                   WS-ED-AMOUNT       DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE WS-RETURN-CODE TO WS-ED-RETURN-CODE
-               MOVE SPACES TO REPORT-RECORD
-               STRING
-                   'RETURN CODE      : ' DELIMITED BY SIZE
-                   WS-ED-RETURN-CODE DELIMITED BY SIZE
-                   INTO REPORT-RECORD
-               END-STRING
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF
-
-           IF FILE-OK
-               MOVE ALL '-' TO REPORT-RECORD
-               PERFORM 9110-WRITE-REPORT-LINE
-           END-IF.
-
-       9110-WRITE-REPORT-LINE.
-      * EN: Write one logical print line to REPORT-FILE.
-      * EN: Any anomaly raises technical error E904.
-      *-----------
-      * ES: Escribe una linea logica de impresion en REPORT-FILE.
-      * ES: Cualquier anomalia lanza el error tecnico E904.
-           WRITE REPORT-RECORD
-
-           IF FS-REPORT NOT = '00'
-               SET FILE-ERROR TO TRUE
-               SET BATCH-ERROR TO TRUE
-               MOVE 16 TO WS-RETURN-CODE
-               MOVE 'E904' TO WS-TEMP-ERR-CODE
-               MOVE 'T' TO WS-TEMP-ERR-SEVERITY
-               MOVE 'REPORT-FILE' TO WS-TEMP-ERR-FILE
-               MOVE FS-REPORT TO WS-TEMP-ERR-STATUS
-               MOVE WS-REPORT-PATH TO WS-TEMP-ERR-PATH
-               MOVE 'WRITE' TO WS-TEMP-ERR-OPERATION
-               MOVE 'WRITE FAILED FOR REPORT FILE'
-                   TO WS-TEMP-ERR-MESSAGE
-           END-IF.
-      * EF7_P34
+      * ES: Cierra los ficheros.
+           PERFORM 9050-CLOSE-OPEN-FILES.
 
        9050-CLOSE-OPEN-FILES.
       * EN: Close only the files that were successfully opened.
