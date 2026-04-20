@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------------------------------------------------
 HISPALIS FINRECON - RESUMEN DE EJECUCION
-FECHA PROCESO    : YYYYMMDD
-HORA PROCESO     : HHMMSSCC
-CUENTAS CARGADAS :       4
-TRANS LEIDAS     :       9
-TRANS OK         :       3
-TRANS ERROR      :       6
-TOTAL DEBITADO   : 00000000375.75
-TOTAL ACREDITADO : 00000001200.00
+FECHA PROCESO    : 20260420
+HORA PROCESO     : 22333763
+CUENTAS CARGADAS :       5
+TRANS LEIDAS     :       8
+TRANS OK         :       4
+TRANS ERROR      :       4
+TOTAL DEBITADO   :         250.00
+TOTAL ACREDITADO :        1200.00
 RETURN CODE      :       0
 ------------------------------------------------------------------------------------------------------------------------

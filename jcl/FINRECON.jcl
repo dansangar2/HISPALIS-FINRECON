@@ -1,25 +1,43 @@
-//FINRECON JOB (ACCT),'FINRECON',CLASS=A,MSGCLASS=X,NOTIFY=&SYSUID
-//* -----------------------------------------------------------------*
-//*  HISPALIS-FINRECON - EJEMPLO DIDACTICO DE EJECUCION BATCH
-//*  Este JCL es de referencia para portfolio.
-//*  En una adaptación real sobre z/OS, el programa usaría DDNAMEs
-//*  en lugar de rutas de sistema de ficheros.
-//* -----------------------------------------------------------------*
-//STEP01   EXEC PGM=FINRECON,REGION=0M
-//STEPLIB  DD  DSN=HISPALIS.COBOL.LOADLIB,DISP=SHR
+//FINRECON JOB (ACCT),'FINRECON DEMO',CLASS=A,MSGCLASS=X,NOTIFY=&SYSUID
+//*------------------------------------------------------------------*
+//* FINRECON - JCL DIDACTICO DE REFERENCIA                           *
+//*------------------------------------------------------------------*
+//* Este JCL es una version demostrativa para portfolio.             *
+//* Muestra como se ejecutaria el batch FINRECON en un entorno host. *
+//* Ajusta DSN, LOADLIB y parametros segun tu instalacion real.      *
+//*------------------------------------------------------------------*
+//STEP010  EXEC PGM=FINRECON
+//STEPLIB  DD  DSN=HISPALIS.FINRECON.LOAD,
+//             DISP=SHR
 //SYSOUT   DD  SYSOUT=*
 //SYSPRINT DD  SYSOUT=*
-//ACCIN    DD  DSN=HISPALIS.FINRECON.ACCOUNTS,DISP=SHR
-//TRNIN    DD  DSN=HISPALIS.FINRECON.TRANS,DISP=SHR
-//RESOUT   DD  DSN=HISPALIS.FINRECON.RESULTS(+1),
+//*------------------------------------------------------------------*
+//* ENTRADAS                                                         *
+//*------------------------------------------------------------------*
+//ACCOUNTS DD  DSN=HISPALIS.FINRECON.INPUT.ACCOUNTS,
+//             DISP=SHR
+//TRANS    DD  DSN=HISPALIS.FINRECON.INPUT.TRANS,
+//             DISP=SHR
+//*------------------------------------------------------------------*
+//* SALIDAS                                                          *
+//*------------------------------------------------------------------*
+//RESULTS  DD  DSN=HISPALIS.FINRECON.OUTPUT.RESULTS,
 //             DISP=(NEW,CATLG,DELETE),
-//             SPACE=(CYL,(1,1),RLSE),
-//             DCB=(RECFM=FB,LRECL=82,BLKSIZE=0)
-//ERROUT   DD  DSN=HISPALIS.FINRECON.ERRORS(+1),
-//             DISP=(NEW,CATLG,DELETE),
-//             SPACE=(CYL,(1,1),RLSE),
-//             DCB=(RECFM=FB,LRECL=80,BLKSIZE=0)
-//RPTOUT   DD  DSN=HISPALIS.FINRECON.REPORT(+1),
-//             DISP=(NEW,CATLG,DELETE),
-//             SPACE=(CYL,(1,1),RLSE),
+//             SPACE=(TRK,(1,1),RLSE),
 //             DCB=(RECFM=FB,LRECL=120,BLKSIZE=0)
+//ERRORS   DD  DSN=HISPALIS.FINRECON.OUTPUT.ERRORS,
+//             DISP=(NEW,CATLG,DELETE),
+//             SPACE=(TRK,(1,1),RLSE),
+//             DCB=(RECFM=FB,LRECL=120,BLKSIZE=0)
+//REPORT   DD  DSN=HISPALIS.FINRECON.OUTPUT.REPORT,
+//             DISP=(NEW,CATLG,DELETE),
+//             SPACE=(TRK,(1,1),RLSE),
+//             DCB=(RECFM=FB,LRECL=133,BLKSIZE=0)
+//*------------------------------------------------------------------*
+//* NOTAS DIDACTICAS                                                 *
+//*------------------------------------------------------------------*
+//* 1) PGM=FINRECON invoca el modulo batch ya compilado en LOADLIB.  *
+//* 2) ACCOUNTS y TRANS son los ficheros de entrada del proceso.     *
+//* 3) RESULTS, ERRORS y REPORT recogen las salidas del lote.        *
+//* 4) En un entorno real, nombres DSN, DCB y SPACE pueden variar.   *
+//*------------------------------------------------------------------*
